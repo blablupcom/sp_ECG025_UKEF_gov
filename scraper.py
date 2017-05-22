@@ -117,6 +117,8 @@ for link in links:
                 if 'redacte' in dates or 'Year' in dates:
                     csvYr = dates.split(' ')[1]
                     csvMth = dates[:3]
+                if ' end' in csvYr:
+                    csvYr = '2017'
                 csvMth = convert_mth_strings(csvMth.upper())
                 todays_date = str(datetime.now())
                 data.append([csvYr, csvMth, url])
