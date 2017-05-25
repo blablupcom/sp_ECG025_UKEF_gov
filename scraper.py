@@ -9,10 +9,7 @@ import urllib2
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-
-
-#### FUNCTIONS 1.2
-import requests     # import requests to validate URL
+#### FUNCTIONS 1.0
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -40,23 +37,25 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = requests.get(url, allow_redirects=True, timeout=20, headers = header)
+        r = urllib2.urlopen(url)
         count = 1
-        while r.status_code == 500 and count < 4:
+        while r.getcode() == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = requests.get(url, allow_redirects=True, timeout=20)
+            r = urllib2.urlopen(url)
         sourceFilename = r.headers.get('Content-Disposition')
+
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.status_code == 200
-        validFiletype = ext in ['.csv', '.xls', '.xlsx']
+        validURL = r.getcode() == 200
+        validFiletype = ext.lower() in ['.csv', '.xls', '.zip', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
         return False, False
+
 
 
 def validate(filename, file_url):
@@ -83,45 +82,38 @@ def convert_mth_strings ( mth_string ):
         mth_string = mth_string.replace(k, v)
     return mth_string
 
-
 #### VARIABLES 1.0
 
-entity_id = "E4501_GC_gov"
-url = "http://www.gateshead.gov.uk/Council%20and%20Democracy/finance/500Expenditure.aspx"
+entity_id = "ECG025_UKEF_gov"
+url = "https://www.gov.uk/government/collections/ukef-spend-over-25-000"
 errors = 0
 data = []
-header = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:32.0) Gecko/20100101 Firefox/32.0',}
 
-#### READ HTML 1.2
+#### READ HTML 1.0
 
-html = requests.get(url, headers = header)
-soup = BeautifulSoup(html.text, 'lxml')
+html = urllib2.urlopen(url)
+soup = BeautifulSoup(html, 'lxml')
+
 
 #### SCRAPE DATA
 
-block = soup.find('table')
-links = block.find_all('tr')
-for link in links:
-    links_csv = link.find_all('td')
-    for link_csv in links_csv:
-            dates = ''
-            try:
-                url = 'http://www.gateshead.gov.uk' +link_csv.find_next('td').find('a')['href']
-            except: pass
-            if '.csv' in url:
-                dates = link_csv.find_next('td').find('a').find_previous('td').find_previous('td').text.strip()
-                if 'Ocober 2014' in dates:
-                    dates = 'October 2014'
-                csvYr = dates[-4:]
-                csvMth = dates[:3]
-                if 'redacte' in dates or 'Year' in dates:
-                    csvYr = dates.split(' ')[1]
-                    csvMth = dates[:3]
-                if ' end' in csvYr:
-                    csvYr = '2017'
-                csvMth = convert_mth_strings(csvMth.upper())
-                todays_date = str(datetime.now())
-                data.append([csvYr, csvMth, url])
+
+blocks = soup.find('div', 'column-two-thirds ').find_all('h3','group-document-list-item-title')
+for block in blocks:
+    link = block.find('a')
+    url = 'https://www.gov.uk' + link['href']
+    html = urllib2.urlopen(url)
+    soup = BeautifulSoup(html, 'lxml')
+    csvMth = link.text.split()[-2][:3]
+    csvYr = link.text.split()[-1]
+    doc_link = soup.find('div', 'attachment-details').find('a')['href']
+    if '.csv' in doc_link or '.xls' in doc_link or '.xlsx' in doc_link:
+        url = 'https://www.gov.uk' + doc_link.replace('/preview', '')
+        csvMth = convert_mth_strings(csvMth.upper())
+        data.append([csvYr, csvMth, url])
+
+
+
 
 #### STORE DATA 1.0
 
